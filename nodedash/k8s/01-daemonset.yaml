@@ -1,0 +1,83 @@
+# DaemonSet deploys one pod per node automatically.
+# This guarantees rk1, rk2, rk3, and rk4 each run their own instance.
+# The pod's hostname will match the node name, which the app uses for color theming.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nodedash
+  namespace: nodedash
+  labels:
+    app: nodedash
+spec:
+  selector:
+    matchLabels:
+      app: nodedash
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: nodedash
+    spec:
+      # Use the node's hostname as the pod hostname so the app detects rk1/rk2/rk3/rk4
+      hostNetwork: false
+      shareProcessNamespace: false
+
+      # Read the node name and set it as POD_NODE_NAME env var
+      # The app reads os.hostname() which in a pod = pod name.
+      # We use hostnamectl via initContainer to sync, OR we just
+      # set HOSTNAME env to the node name directly.
+      initContainers: []
+
+      containers:
+        - name: nodedash
+          image: 192.168.1.75:32000/nodedash:latest
+          # For local testing without a registry, use:
+          # image: nodedash:latest
+          # imagePullPolicy: Never
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            # Override hostname with the Kubernetes node name so theming works
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+
+      tolerations:
+        # Allow scheduling on control-plane nodes (all our nodes are control+worker)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule

@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NodeDash — cropseyit.com</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --node-color: #37474f;
+    --node-accent: #78909c;
+    --node-glow: rgba(55,71,79,0.4);
+    --bg: #0a0a0f;
+    --surface: #0f0f1a;
+    --surface2: #141420;
+    --border: #1e1e2e;
+    --text: #cdd6f4;
+    --text-dim: #6c7086;
+    --text-bright: #ffffff;
+    --green: #a6e3a1;
+    --yellow: #f9e2af;
+    --red: #f38ba8;
+    --blue: #89b4fa;
+    --cyan: #89dceb;
+    --mauve: #cba6f7;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    height: 2.2rem;
+    background: var(--node-color);
+    box-shadow: 0 2px 20px var(--node-glow);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--node-accent);
+  }
+
+  #topbar .brand {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: #fff;
+    text-shadow: 0 0 12px rgba(255,255,255,0.5);
+  }
+
+  #topbar .node-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,0.15);
+    padding: 0.15rem 0.6rem;
+    border-radius: 2px;
+    letter-spacing: 0.1em;
+  }
+
+  #topbar .clock {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.8);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* ── NODE BANNER ── */
+  #node-banner {
+    background: linear-gradient(135deg, var(--node-color) 0%, color-mix(in srgb, var(--node-color) 60%, black) 100%);
+    border-bottom: 2px solid var(--node-accent);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    box-shadow: 0 4px 30px var(--node-glow);
+  }
+
+  #node-banner .hostname {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(255,255,255,0.4);
+    letter-spacing: -0.02em;
+  }
+
+  #node-banner .ip-badge {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.3);
+    padding: 0.3rem 0.8rem;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.2);
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #node-banner .uptime-badge {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.7);
+    margin-left: auto;
+  }
+
+  /* ── MAIN GRID ── */
+  #main {
+    padding: 0.75rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 0.6rem;
+  }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--node-accent), transparent);
+    opacity: 0.5;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.7rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--node-accent);
+  }
+
+  .panel-header .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--node-accent);
+    box-shadow: 0 0 6px var(--node-glow);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .panel-body { padding: 0.6rem 0.75rem; }
+
+  /* ── METER BAR ── */
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .metric-label {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    width: 3.5rem;
+    flex-shrink: 0;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .meter-track {
+    flex: 1;
+    height: 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 1px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .meter-fill {
+    height: 100%;
+    border-radius: 1px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .meter-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 50%, rgba(255,255,255,0.1) 100%);
+  }
+
+  .meter-fill.cpu    { background: linear-gradient(90deg, #a6e3a1, #74c77a); }
+  .meter-fill.mem    { background: linear-gradient(90deg, #89b4fa, #5294e2); }
+  .meter-fill.disk   { background: linear-gradient(90deg, #f9e2af, #e2a95f); }
+  .meter-fill.hi     { background: linear-gradient(90deg, #f38ba8, #d4637a) !important; }
+
+  .meter-value {
+    font-size: 0.65rem;
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text);
+    width: 3.5rem;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── BIG STAT ── */
+  .big-stat {
+    text-align: center;
+    padding: 0.4rem 0;
+  }
+
+  .big-stat .val {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--node-accent);
+    line-height: 1;
+    text-shadow: 0 0 20px var(--node-glow);
+  }
+
+  .big-stat .lbl {
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    margin-top: 0.2rem;
+  }
+
+  /* ── LOAD GRAPH ── */
+  #cpu-graph {
+    width: 100%;
+    height: 50px;
+    margin-top: 0.3rem;
+  }
+
+  /* ── PROCESS TABLE ── */
+  .proc-table {
+    width: 100%;
+    font-size: 0.62rem;
+    font-family: 'Share Tech Mono', monospace;
+    border-collapse: collapse;
+  }
+
+  .proc-table thead th {
+    color: var(--node-accent);
+    text-align: left;
+    padding: 0.1rem 0.3rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .proc-table tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.15s;
+  }
+
+  .proc-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+  .proc-table tbody td {
+    padding: 0.18rem 0.3rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
+  }
+
+  .proc-table .cpu-hot { color: var(--red); }
+  .proc-table .cmd-col { color: var(--cyan); }
+
+  /* ── NETWORK PANEL ── */
+  .net-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.65rem;
+  }
+
+  .net-iface { color: var(--mauve); font-family: 'Share Tech Mono', monospace; }
+  .net-rx    { color: var(--green); }
+  .net-tx    { color: var(--yellow); }
+
+  /* ── USERS TABLE ── */
+  .user-table {
+    width: 100%;
+    font-size: 0.62rem;
+    font-family: 'Share Tech Mono', monospace;
+    border-collapse: collapse;
+  }
+
+  .user-table thead th {
+    color: var(--node-accent);
+    text-align: left;
+    padding: 0.15rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+  }
+
+  .user-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .user-table tbody td { padding: 0.22rem 0.4rem; }
+
+  .role-admin    { color: var(--red);  }
+  .role-operator { color: var(--yellow); }
+  .role-viewer   { color: var(--cyan); }
+
+  .apikey-val {
+    color: var(--text-dim);
+    font-size: 0.58rem;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .apikey-val:hover { color: var(--node-accent); }
+
+  /* ── API CONSOLE ── */
+  #api-console {
+    grid-column: 1 / -1;
+  }
+
+  .console-tabs {
+    display: flex;
+    gap: 0.3rem;
+    padding: 0 0.7rem;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    font-size: 0.62rem;
+    padding: 0.3rem 0.7rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    letter-spacing: 0.06em;
+  }
+
+  .tab.active {
+    color: var(--node-accent);
+    border-bottom-color: var(--node-accent);
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .api-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.65rem;
+  }
+
+  .method {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 2px;
+    width: 3rem;
+    text-align: center;
+    flex-shrink: 0;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .method.GET  { background: rgba(166,227,161,0.15); color: var(--green); border: 1px solid rgba(166,227,161,0.3); }
+  .method.POST { background: rgba(249,226,175,0.15); color: var(--yellow); border: 1px solid rgba(249,226,175,0.3); }
+  .method.DELETE { background: rgba(243,139,168,0.15); color: var(--red); border: 1px solid rgba(243,139,168,0.3); }
+
+  .endpoint    { color: var(--cyan); font-family: 'Share Tech Mono', monospace; }
+  .ep-desc     { color: var(--text-dim); margin-left: 0.5rem; }
+  .ep-auth     { margin-left: auto; font-size: 0.58rem; color: var(--mauve); flex-shrink: 0; }
+
+  .try-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 0.15rem 0.5rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .try-btn:hover {
+    background: var(--node-color);
+    border-color: var(--node-accent);
+    color: #fff;
+  }
+
+  /* ── TRY-IT AREA ── */
+  #try-area {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0.6rem;
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+  }
+
+  #try-area .try-label { color: var(--node-accent); font-size: 0.6rem; letter-spacing: 0.1em; margin-bottom: 0.4rem; }
+
+  #try-area select, #try-area input, #try-area textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 2px;
+    outline: none;
+    width: 100%;
+    margin-bottom: 0.4rem;
+  }
+
+  #try-area select:focus, #try-area input:focus, #try-area textarea:focus {
+    border-color: var(--node-accent);
+  }
+
+  #try-area .run-btn {
+    background: var(--node-color);
+    border: 1px solid var(--node-accent);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 0.3rem 1rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+
+  #try-area .run-btn:hover { box-shadow: 0 0 12px var(--node-glow); }
+
+  #response-box {
+    margin-top: 0.5rem;
+    background: #050508;
+    border: 1px solid var(--border);
+    padding: 0.5rem;
+    border-radius: 2px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--green);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* ── MINI FOOTER ── */
+  #footer {
+    text-align: center;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    padding: 0.5rem;
+    border-top: 1px solid var(--border);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--node-accent); }
+
+  /* ── SPAN HELPERS ── */
+  .col1 { grid-column: 1; }
+  .col2 { grid-column: 2; }
+  .col3 { grid-column: 3; }
+  .span2 { grid-column: span 2; }
+  .span3 { grid-column: 1 / -1; }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 0.8rem;
+  }
+
+  .info-item { font-size: 0.63rem; }
+  .info-key  { color: var(--text-dim); font-size: 0.58rem; letter-spacing: 0.08em; }
+  .info-val  { color: var(--text); font-family: 'Share Tech Mono', monospace; }
+
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">◈ NODEDASH // cropseyit.com</div>
+  <div class="node-label" id="top-node-label">Loading…</div>
+  <div class="clock" id="clock">--:--:--</div>
+</div>
+
+<div id="node-banner">
+  <div class="hostname" id="banner-hostname">────────</div>
+  <div class="ip-badge" id="banner-ip">0.0.0.0</div>
+  <div class="uptime-badge" id="banner-uptime">uptime: –</div>
+</div>
+
+<div id="main">
+
+  <!-- CPU Panel -->
+  <div class="panel col1">
+    <div class="panel-header"><span class="dot"></span>CPU</div>
+    <div class="panel-body">
+      <div class="metric-row">
+        <span class="metric-label">usage</span>
+        <div class="meter-track"><div class="meter-fill cpu" id="cpu-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="cpu-pct">0%</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">load 1m</span>
+        <div class="meter-track"><div class="meter-fill cpu" id="load1-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="load1-val">0.00</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">load 5m</span>
+        <div class="meter-track"><div class="meter-fill cpu" id="load5-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="load5-val">0.00</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">load 15m</span>
+        <div class="meter-track"><div class="meter-fill cpu" id="load15-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="load15-val">0.00</span>
+      </div>
+      <canvas id="cpu-graph"></canvas>
+      <div class="info-item" style="margin-top:0.4rem">
+        <div class="info-key">MODEL</div>
+        <div class="info-val" id="cpu-model">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Memory Panel -->
+  <div class="panel col2">
+    <div class="panel-header"><span class="dot"></span>MEMORY</div>
+    <div class="panel-body">
+      <div class="metric-row">
+        <span class="metric-label">used</span>
+        <div class="meter-track"><div class="meter-fill mem" id="mem-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="mem-pct">0%</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-top:0.6rem;text-align:center">
+        <div>
+          <div class="info-key">TOTAL</div>
+          <div class="info-val" id="mem-total" style="font-size:1.1rem;color:var(--blue)">–</div>
+          <div class="info-key">GB</div>
+        </div>
+        <div>
+          <div class="info-key">USED</div>
+          <div class="info-val" id="mem-used" style="font-size:1.1rem;color:var(--red)">–</div>
+          <div class="info-key">GB</div>
+        </div>
+        <div>
+          <div class="info-key">FREE</div>
+          <div class="info-val" id="mem-free" style="font-size:1.1rem;color:var(--green)">–</div>
+          <div class="info-key">GB</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disk Panel -->
+  <div class="panel col3">
+    <div class="panel-header"><span class="dot"></span>DISK  /</div>
+    <div class="panel-body">
+      <div class="metric-row">
+        <span class="metric-label">used</span>
+        <div class="meter-track"><div class="meter-fill disk" id="disk-bar" style="width:0%"></div></div>
+        <span class="meter-value" id="disk-pct">0%</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;margin-top:0.6rem;text-align:center">
+        <div>
+          <div class="info-key">TOTAL</div>
+          <div class="info-val" id="disk-total" style="font-size:1.1rem;color:var(--blue)">–</div>
+        </div>
+        <div>
+          <div class="info-key">USED</div>
+          <div class="info-val" id="disk-used" style="font-size:1.1rem;color:var(--yellow)">–</div>
+        </div>
+        <div>
+          <div class="info-key">FREE</div>
+          <div class="info-val" id="disk-free" style="font-size:1.1rem;color:var(--green)">–</div>
+        </div>
+      </div>
+      <div class="info-grid" style="margin-top:0.6rem">
+        <div class="info-item">
+          <div class="info-key">PLATFORM</div>
+          <div class="info-val" id="sys-platform">–</div>
+        </div>
+        <div class="info-item">
+          <div class="info-key">ARCH</div>
+          <div class="info-val" id="sys-arch">–</div>
+        </div>
+        <div class="info-item" style="grid-column:1/-1">
+          <div class="info-key">KERNEL</div>
+          <div class="info-val" id="sys-kernel">–</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Processes -->
+  <div class="panel span2">
+    <div class="panel-header"><span class="dot"></span>TOP PROCESSES</div>
+    <div class="panel-body" style="padding:0.4rem 0.5rem">
+      <table class="proc-table">
+        <thead>
+          <tr>
+            <th>USER</th><th>PID</th><th>CPU%</th><th>MEM%</th><th>CMD</th>
+          </tr>
+        </thead>
+        <tbody id="proc-tbody">
+          <tr><td colspan="5" style="color:var(--text-dim);text-align:center;padding:0.5rem">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Network -->
+  <div class="panel col3">
+    <div class="panel-header"><span class="dot"></span>NETWORK</div>
+    <div class="panel-body" id="net-body">
+      <div style="color:var(--text-dim);font-size:0.65rem">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Users -->
+  <div class="panel span3">
+    <div class="panel-header"><span class="dot"></span>LAB USERS — mike[1-5]@my.lab</div>
+    <div class="panel-body" style="padding:0.4rem 0.5rem">
+      <table class="user-table">
+        <thead>
+          <tr><th>#</th><th>EMAIL</th><th>NAME</th><th>ROLE</th><th>API KEY (click to copy)</th></tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="5" style="color:var(--text-dim);text-align:center;padding:0.5rem">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- API Console -->
+  <div class="panel span3" id="api-console">
+    <div class="panel-header"><span class="dot"></span>API REFERENCE &amp; CONSOLE</div>
+    <div class="console-tabs">
+      <div class="tab active" data-tab="endpoints">Endpoints</div>
+      <div class="tab" data-tab="tryit">Try It</div>
+    </div>
+
+    <div class="tab-content active" id="tab-endpoints">
+      <div class="panel-body" style="padding:0.5rem 0.75rem">
+
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/health</span>
+          <span class="ep-desc">— Node health check (no auth)</span>
+          <span class="ep-auth">public</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/node</span>
+          <span class="ep-desc">— Node identity, IP, theme, uptime</span>
+          <span class="ep-auth">public</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/stats</span>
+          <span class="ep-desc">— Full system stats (CPU, mem, disk, procs, net)</span>
+          <span class="ep-auth">public</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/users</span>
+          <span class="ep-desc">— List all users</span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/users/:id</span>
+          <span class="ep-desc">— Get single user by ID</span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/users/:id/key</span>
+          <span class="ep-desc">— Get your own API key (admin sees all)</span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+        <div class="api-row">
+          <span class="method GET">GET</span>
+          <span class="endpoint">/api/messages</span>
+          <span class="ep-desc">— List last 50 messages</span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+        <div class="api-row">
+          <span class="method POST">POST</span>
+          <span class="endpoint">/api/messages</span>
+          <span class="ep-desc">— Post a message  <code style="color:var(--yellow);font-size:0.6rem">{"text":"..."}</code></span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+        <div class="api-row">
+          <span class="method DELETE">DELETE</span>
+          <span class="endpoint">/api/messages/:id</span>
+          <span class="ep-desc">— Delete a message</span>
+          <span class="ep-auth">🔑 admin only</span>
+        </div>
+        <div class="api-row">
+          <span class="method POST">POST</span>
+          <span class="endpoint">/api/echo</span>
+          <span class="ep-desc">— Echo request body back, shows serving node</span>
+          <span class="ep-auth">🔑 any key</span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-tryit">
+      <div class="panel-body">
+        <div id="try-area">
+          <div class="try-label">LIVE API CONSOLE</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:0.4rem">
+            <select id="try-method">
+              <option>GET</option>
+              <option>POST</option>
+              <option>DELETE</option>
+            </select>
+            <select id="try-endpoint">
+              <option value="/api/health">/api/health</option>
+              <option value="/api/node">/api/node</option>
+              <option value="/api/stats">/api/stats</option>
+              <option value="/api/users">/api/users</option>
+              <option value="/api/users/1">/api/users/1</option>
+              <option value="/api/messages">/api/messages</option>
+              <option value="/api/echo">/api/echo</option>
+            </select>
+            <select id="try-user">
+              <option value="">— select user (for auth) —</option>
+            </select>
+          </div>
+          <textarea id="try-body" rows="2" placeholder='POST body JSON e.g. {"text":"hello from console"}'></textarea>
+          <button class="run-btn" onclick="runTry()">▶ EXECUTE</button>
+          <div id="response-box">// Response will appear here</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="footer">
+  NodeDash v1.0 — cropseyit.com MicroK8s Lab — Auto-refresh every 5s — <span id="footer-ts">–</span>
+</div>
+
+<script>
+const USERS_DATA = [];
+let cpuHistory = new Array(60).fill(0);
+
+// ── Apply theme from API ─────────────────────────────────
+async function initTheme() {
+  try {
+    const r = await fetch('/api/node');
+    const d = await r.json();
+    const t = d.theme;
+
+    document.documentElement.style.setProperty('--node-color', t.color);
+    document.documentElement.style.setProperty('--node-accent', t.accent);
+    document.documentElement.style.setProperty('--node-glow', t.glow);
+
+    document.getElementById('top-node-label').textContent = t.label;
+    document.getElementById('banner-hostname').textContent = d.hostname;
+    document.getElementById('banner-ip').textContent = d.ip;
+    document.getElementById('banner-uptime').textContent = 'uptime: ' + d.uptime;
+    document.title = `NodeDash — ${d.hostname}`;
+  } catch(e) { console.error(e); }
+}
+
+// ── Stats polling ────────────────────────────────────────
+async function updateStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+
+    // CPU
+    const cpuPct = parseFloat(d.cpu.percent);
+    document.getElementById('cpu-bar').style.width = cpuPct + '%';
+    if (cpuPct > 80) document.getElementById('cpu-bar').classList.add('hi');
+    else document.getElementById('cpu-bar').classList.remove('hi');
+    document.getElementById('cpu-pct').textContent = cpuPct + '%';
+
+    const maxLoad = d.cpu.cores;
+    const l1 = parseFloat(d.cpu.load1);
+    const l5 = parseFloat(d.cpu.load5);
+    const l15 = parseFloat(d.cpu.load15);
+    document.getElementById('load1-bar').style.width  = Math.min(100, (l1/maxLoad)*100) + '%';
+    document.getElementById('load5-bar').style.width  = Math.min(100, (l5/maxLoad)*100) + '%';
+    document.getElementById('load15-bar').style.width = Math.min(100, (l15/maxLoad)*100) + '%';
+    document.getElementById('load1-val').textContent  = d.cpu.load1;
+    document.getElementById('load5-val').textContent  = d.cpu.load5;
+    document.getElementById('load15-val').textContent = d.cpu.load15;
+    document.getElementById('cpu-model').textContent  = d.cpu.model;
+
+    cpuHistory.push(cpuPct);
+    cpuHistory.shift();
+    drawCpuGraph();
+
+    // Memory
+    const memPct = parseFloat(d.memory.percent);
+    document.getElementById('mem-bar').style.width = memPct + '%';
+    if (memPct > 85) document.getElementById('mem-bar').classList.add('hi');
+    else document.getElementById('mem-bar').classList.remove('hi');
+    document.getElementById('mem-pct').textContent  = memPct + '%';
+    document.getElementById('mem-total').textContent = d.memory.total;
+    document.getElementById('mem-used').textContent  = d.memory.used;
+    document.getElementById('mem-free').textContent  = d.memory.free;
+
+    // Disk
+    const diskPct = parseInt(d.disk.percent) || 0;
+    document.getElementById('disk-bar').style.width = diskPct + '%';
+    if (diskPct > 85) document.getElementById('disk-bar').classList.add('hi');
+    else document.getElementById('disk-bar').classList.remove('hi');
+    document.getElementById('disk-pct').textContent  = d.disk.percent;
+    document.getElementById('disk-total').textContent = d.disk.total;
+    document.getElementById('disk-used').textContent  = d.disk.used;
+    document.getElementById('disk-free').textContent  = d.disk.free;
+
+    // System info
+    document.getElementById('sys-platform').textContent = d.platform;
+    document.getElementById('sys-arch').textContent     = d.arch;
+    document.getElementById('sys-kernel').textContent   = d.kernelVersion;
+
+    // Uptime
+    document.getElementById('banner-uptime').textContent = 'uptime: ' + d.uptime;
+
+    // Processes
+    const tbody = document.getElementById('proc-tbody');
+    tbody.innerHTML = d.processes.map(p => `
+      <tr>
+        <td>${p.user}</td>
+        <td>${p.pid}</td>
+        <td class="${parseFloat(p.cpu)>10?'cpu-hot':''}">${p.cpu}%</td>
+        <td>${p.mem}%</td>
+        <td class="cmd-col">${p.cmd}</td>
+      </tr>`).join('') || '<tr><td colspan="5" style="color:var(--text-dim)">No process data</td></tr>';
+
+    // Network
+    const netBody = document.getElementById('net-body');
+    if (d.network.length) {
+      netBody.innerHTML = d.network.map(n => `
+        <div class="net-row">
+          <span class="net-iface">${n.iface}</span>
+          <span class="net-rx">↓ ${n.rxBytes}</span>
+          <span class="net-tx">↑ ${n.txBytes}</span>
+        </div>`).join('');
+    }
+
+    document.getElementById('footer-ts').textContent = d.timestamp;
+
+  } catch(e) { console.error('Stats error:', e); }
+}
+
+// ── CPU History Graph ────────────────────────────────────
+function drawCpuGraph() {
+  const canvas = document.getElementById('cpu-graph');
+  const W = canvas.parentElement.clientWidth - 24;
+  const H = 50;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = (H / 4) * i;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  const nodeColor = getComputedStyle(document.documentElement).getPropertyValue('--node-accent').trim();
+
+  // Fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, nodeColor + '60');
+  grad.addColorStop(1, nodeColor + '05');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  cpuHistory.forEach((v, i) => {
+    const x = (i / (cpuHistory.length - 1)) * W;
+    const y = H - (v / 100) * H;
+    i === 0 ? ctx.lineTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Line
+  ctx.strokeStyle = nodeColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  cpuHistory.forEach((v, i) => {
+    const x = (i / (cpuHistory.length - 1)) * W;
+    const y = H - (v / 100) * H;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// ── Load users ───────────────────────────────────────────
+async function loadUsers() {
+  // We display them from hardcoded data to avoid needing auth
+  // In prod the API would be used
+  const users = [
+    { id:1, email:'mike1@my.lab', name:'Mike One',   role:'admin',    apiKey:'mk1-6d696b65314' },
+    { id:2, email:'mike2@my.lab', name:'Mike Two',   role:'operator', apiKey:'mk2-6d696b65324' },
+    { id:3, email:'mike3@my.lab', name:'Mike Three', role:'operator', apiKey:'mk3-6d696b65334' },
+    { id:4, email:'mike4@my.lab', name:'Mike Four',  role:'viewer',   apiKey:'mk4-6d696b65344' },
+    { id:5, email:'mike5@my.lab', name:'Mike Five',  role:'viewer',   apiKey:'mk5-6d696b65354' },
+  ];
+
+  // Fetch real keys from server
+  try {
+    const r = await fetch('/api/users/1/key', { headers: { 'X-Api-Key': 'mk1-6d696b65314' } });
+    if (r.ok) {
+      // Populate real keys via successive calls
+      for (const u of users) {
+        try {
+          const kr = await fetch(`/api/users/${u.id}/key`, { headers: { 'X-Api-Key': users[0].apiKey } });
+          if (kr.ok) { const kd = await kr.json(); u.apiKey = kd.apiKey; }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  USERS_DATA.length = 0;
+  users.forEach(u => USERS_DATA.push(u));
+
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td style="color:var(--text-dim)">${u.id}</td>
+      <td style="color:var(--cyan)">${u.email}</td>
+      <td>${u.name}</td>
+      <td class="role-${u.role}">${u.role}</td>
+      <td><span class="apikey-val" title="Click to copy" onclick="copyKey('${u.apiKey}', this)">${u.apiKey}</span></td>
+    </tr>`).join('');
+
+  // Populate try-it user selector
+  const sel = document.getElementById('try-user');
+  sel.innerHTML = '<option value="">— select user (for auth) —</option>' +
+    users.map(u => `<option value="${u.apiKey}">${u.email} (${u.role})</option>`).join('');
+}
+
+function copyKey(key, el) {
+  navigator.clipboard.writeText(key).then(() => {
+    const orig = el.textContent;
+    el.textContent = '✓ copied';
+    el.style.color = 'var(--green)';
+    setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
+  });
+}
+
+// ── Console Tabs ─────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Try-it console ───────────────────────────────────────
+async function runTry() {
+  const method   = document.getElementById('try-method').value;
+  const endpoint = document.getElementById('try-endpoint').value;
+  const apiKey   = document.getElementById('try-user').value;
+  const bodyText = document.getElementById('try-body').value.trim();
+  const box      = document.getElementById('response-box');
+
+  box.textContent = '// Sending request…';
+  const start = Date.now();
+
+  try {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (apiKey) opts.headers['X-Api-Key'] = apiKey;
+    if ((method === 'POST') && bodyText) opts.body = bodyText;
+
+    const r = await fetch(endpoint, opts);
+    const elapsed = Date.now() - start;
+    const data = await r.json();
+    box.textContent = `// HTTP ${r.status} — ${elapsed}ms\n` + JSON.stringify(data, null, 2);
+    box.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) {
+    box.textContent = '// Error: ' + e.message;
+    box.style.color = 'var(--red)';
+  }
+}
+
+// ── Clock ────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+
+// ── Init ─────────────────────────────────────────────────
+async function init() {
+  await initTheme();
+  await updateStats();
+  await loadUsers();
+  setInterval(updateStats, 5000);
+  setInterval(updateClock, 1000);
+  updateClock();
+}
+
+init();
+</script>
+</body>
+</html>

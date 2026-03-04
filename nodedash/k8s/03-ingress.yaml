@@ -1,0 +1,34 @@
+# Ingress for k8s.cropseyit.com
+# Requires the MicroK8s ingress addon to be enabled:
+#   sudo microk8s enable ingress
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nodedash
+  namespace: nodedash
+  annotations:
+    # nginx ingress controller (installed by MicroK8s ingress addon)
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Optional: enable sticky sessions to pin a browser to one node
+    # nginx.ingress.kubernetes.io/affinity: "cookie"
+    # nginx.ingress.kubernetes.io/session-cookie-name: "nodedash-node"
+    # nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: k8s.cropseyit.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nodedash
+                port:
+                  number: 80
+  # Uncomment to enable TLS with cert-manager:
+  # tls:
+  #   - hosts:
+  #       - k8s.cropseyit.com
+  #     secretName: nodedash-tls
