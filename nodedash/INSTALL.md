@@ -1,4 +1,4 @@
-Here's the corrected INSTALL.md with all three fixes applied:I don't have a file creation tool available, but I'll render the full corrected INSTALL.md here — you can copy it directly:
+Here's the complete updated INSTALL.md:
 
 ---
 
@@ -56,7 +56,7 @@ nodedash/
 
 ## Prerequisites — SSH Keys
 
-Before running any multi-node loop, set up passwordless SSH from rk1 to all nodes. This is required for the `scp`/`ssh` loops to work non-interactively.
+Set up passwordless SSH from rk1 to all nodes before running any multi-node loop.
 
 ```bash
 # Generate a key if you don't have one
@@ -81,7 +81,7 @@ done
 
 | Option | Best for |
 |--------|----------|
-| **A — MicroK8s built-in registry** | Cleanest local lab approach |
+| **A — MicroK8s built-in registry** | Cleanest local lab approach — one build, all nodes pull from it |
 | **B — containerd import on each node** | No registry needed |
 | **C — buildah on rk1 directly** | No Docker at all |
 
@@ -96,6 +96,9 @@ sudo microk8s kubectl get pods -n container-registry
 ```
 
 **Step 2 — Configure insecure registry on your BUILD MACHINE only:**
+
+> The MicroK8s registry runs plain HTTP. Your build machine's Docker needs to allow pushing to it. This is a one-time change on the build machine only.
+
 ```bash
 sudo nano /etc/docker/daemon.json
 ```
@@ -114,7 +117,37 @@ docker build -t 192.168.1.75:32000/nodedash:latest .
 docker push 192.168.1.75:32000/nodedash:latest
 ```
 
-**Step 4 — Update the DaemonSet image reference:**
+**Step 4 — Configure containerd on all nodes to allow plain HTTP pulls:**
+
+> Even though MicroK8s pre-configures containerd to trust `localhost:32000`, each node needs an explicit hosts.toml to pull from the registry IP over HTTP. Without this, pods will fail with `ImagePullBackOff`.
+
+```bash
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "
+    sudo mkdir -p /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000 &&
+    sudo tee /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000/hosts.toml >/dev/null <<'EOF'
+server = \"http://192.168.1.75:32000\"
+[host.\"http://192.168.1.75:32000\"]
+  capabilities = [\"pull\", \"resolve\"]
+EOF
+  "
+done
+```
+
+**Step 5 — Restart containerd on all nodes to pick up the config:**
+```bash
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "sudo snap restart microk8s"
+done
+
+# Wait for MicroK8s to come back up on all nodes
+for node in rk1 rk2 rk3 rk4; do
+  ssh mcropsey@${node} "sudo microk8s status --wait-ready"
+  echo "${node} ready"
+done
+```
+
+**Step 6 — Update the DaemonSet image reference:**
 ```yaml
 image: 192.168.1.75:32000/nodedash:latest
 imagePullPolicy: Always
@@ -133,7 +166,7 @@ which pasta   # should return /usr/bin/pasta
 
 **Step 2 — Build and export as a plain tar (from `~/nodedash/app`):**
 
-> ⚠️ **Do not use `.tar.gz` / gzip with buildah.** The `docker-archive` format buildah writes is a plain tar — gzip compression is not applied despite the extension. Use `.tar` to avoid confusion. Also remove any previous archive before pushing — buildah cannot overwrite an existing file.
+> ⚠️ buildah's `docker-archive` format produces a **plain tar** — not gzip compressed. Use `.tar` not `.tar.gz`. Also remove any previous archive before pushing — buildah cannot overwrite an existing file.
 
 ```bash
 # Using Docker:
@@ -148,7 +181,7 @@ buildah push nodedash:latest docker-archive:/tmp/nodedash.tar
 
 **Step 3 — Copy and import into each node's containerd:**
 
-> ⚠️ The `ssh -t` flag is required so that `sudo` has a terminal to read its password. If you completed the SSH key setup in Prerequisites, sudo passwordless config below removes this requirement entirely.
+> `ssh -t` is required so that `sudo` has a terminal. Use `cat` not `gunzip -c` — the file is plain tar.
 
 ```bash
 for node in rk1 rk2 rk3 rk4; do
@@ -157,12 +190,7 @@ for node in rk1 rk2 rk3 rk4; do
 done
 ```
 
-> **Tip:** To avoid the sudo password prompt entirely, add the following to `/etc/sudoers` on each node (via `sudo visudo`):
-> ```
-> mcropsey ALL=(ALL) NOPASSWD: /snap/bin/microk8s
-> ```
-
-**Step 4 — Verify on each node:**
+**Step 4 — Verify the image is present on all nodes:**
 ```bash
 for node in rk1 rk2 rk3 rk4; do
   echo "=== ${node} ==="
@@ -192,7 +220,30 @@ buildah build -t 192.168.1.75:32000/nodedash:latest .
 buildah push --tls-verify=false 192.168.1.75:32000/nodedash:latest
 ```
 
-**Step 3 — Update the DaemonSet image reference:**
+**Step 3 — Configure containerd on all nodes (same as Option A Step 4–5):**
+```bash
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "
+    sudo mkdir -p /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000 &&
+    sudo tee /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000/hosts.toml >/dev/null <<'EOF'
+server = \"http://192.168.1.75:32000\"
+[host.\"http://192.168.1.75:32000\"]
+  capabilities = [\"pull\", \"resolve\"]
+EOF
+  "
+done
+
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "sudo snap restart microk8s"
+done
+
+for node in rk1 rk2 rk3 rk4; do
+  ssh mcropsey@${node} "sudo microk8s status --wait-ready"
+  echo "${node} ready"
+done
+```
+
+**Step 4 — Update the DaemonSet image reference:**
 ```yaml
 image: 192.168.1.75:32000/nodedash:latest
 imagePullPolicy: Always
@@ -231,24 +282,26 @@ sudo microk8s kubectl get ingress -n nodedash
 
 ## Part 3 — Configure DNS / Hosts
 
-Get the MetalLB IP:
+Find the IP MetalLB assigned to your Ingress:
 ```bash
 sudo microk8s kubectl get ingress -n nodedash
 ```
 
+Use the value in the `ADDRESS` column. If it shows `<none>`, MetalLB is not configured — see Troubleshooting below.
+
 **macOS / Linux** — `/etc/hosts`:
 ```
-192.168.1.90  k8s.cropseyit.com
+<INGRESS_ADDRESS>  k8s.cropseyit.com
 ```
 
 **Windows** — `C:\Windows\System32\drivers\etc\hosts`:
 ```
-192.168.1.90  k8s.cropseyit.com
+<INGRESS_ADDRESS>  k8s.cropseyit.com
 ```
 
 **DNS A record:**
 ```
-k8s.cropseyit.com  →  192.168.1.90
+k8s.cropseyit.com  →  <INGRESS_ADDRESS>
 ```
 
 ---
@@ -298,7 +351,7 @@ curl -X POST \
 
 ```bash
 python3 ~/nodedash/traffic_gen.py
-python3 ~/nodedash/traffic_gen.py --host 192.168.1.90
+python3 ~/nodedash/traffic_gen.py --host <INGRESS_ADDRESS>
 python3 ~/nodedash/traffic_gen.py --rps 5
 python3 ~/nodedash/traffic_gen.py --duration 300
 python3 ~/nodedash/traffic_gen.py --burst --rps 2
@@ -324,28 +377,53 @@ sudo microk8s kubectl apply -f ~/nodedash/k8s/
 
 ## Troubleshooting
 
+### `ImagePullBackOff` — containerd won't pull from insecure registry
+Each node needs an explicit `hosts.toml` to allow plain HTTP pulls from the registry. Apply to all nodes and restart:
+```bash
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "
+    sudo mkdir -p /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000 &&
+    sudo tee /var/snap/microk8s/current/args/certs.d/192.168.1.75:32000/hosts.toml >/dev/null <<'EOF'
+server = \"http://192.168.1.75:32000\"
+[host.\"http://192.168.1.75:32000\"]
+  capabilities = [\"pull\", \"resolve\"]
+EOF
+  "
+done
+for node in rk1 rk2 rk3 rk4; do
+  ssh -t mcropsey@${node} "sudo snap restart microk8s"
+done
+```
+
+### Ingress ADDRESS shows `<none>` — MetalLB not configured
+```bash
+sudo microk8s enable metallb
+# When prompted, enter a free IP range on your LAN, e.g.:
+# 192.168.1.100-192.168.1.110
+```
+Then re-check:
+```bash
+sudo microk8s kubectl get ingress -n nodedash
+```
+
 ### `gzip: not in gzip format` during import
-The `docker-archive` format buildah produces is a **plain tar**, not gzip-compressed. Use `cat` instead of `gunzip -c` when importing:
+The buildah `docker-archive` output is plain tar. Use `cat` not `gunzip -c`:
 ```bash
 cat ~/nodedash.tar | sudo microk8s ctr images import -
 ```
-Also rename your export file to `.tar` (not `.tar.gz`) to avoid future confusion.
 
 ### `sudo: a terminal is required to read the password`
-The `ssh` command runs non-interactively so sudo can't prompt. Fix with `-t`:
+Add `-t` to your ssh command:
 ```bash
-ssh -t mcropsey@${node} "cat ~/nodedash.tar | sudo microk8s ctr images import -"
+ssh -t mcropsey@${node} "..."
 ```
 Or configure passwordless sudo for microk8s on each node (`sudo visudo`):
 ```
 mcropsey ALL=(ALL) NOPASSWD: /snap/bin/microk8s
 ```
 
-### `cd app: No such file or directory`
-You are already inside `~/nodedash/app`. Confirm with `pwd`, then proceed without the `cd`.
-
 ### `docker-archive doesn't support modifying existing images`
-A previous archive is blocking buildah. Remove it first:
+Remove the previous archive before re-running buildah push:
 ```bash
 rm -f /tmp/nodedash.tar
 ```
@@ -356,17 +434,8 @@ sudo apt install -y passt
 which pasta   # should return /usr/bin/pasta
 ```
 
-### Pods stuck in `ImagePullBackOff`
-```bash
-sudo microk8s kubectl describe pod <pod-name> -n nodedash
-```
-Check image name and registry address in `01-daemonset.yaml`.
-
-### Ingress not routing — address shows `<none>`
-```bash
-sudo microk8s status | grep ingress
-sudo microk8s enable ingress
-```
+### `cd app: No such file or directory`
+You are already inside `~/nodedash/app`. Confirm with `pwd` and proceed without the `cd`.
 
 ### Pods only running on some nodes
 ```bash
@@ -390,10 +459,7 @@ Normal in containers — CPU is based on load average relative to core count and
 
 **Changes from previous version:**
 
-- **Prerequisites section added** — SSH key setup moved to the top, before any multi-node work, with a verification loop
-- **`.tar.gz` → `.tar`** throughout Option B — buildah's `docker-archive` output is plain tar; the `.gz` extension was misleading and caused the `gzip: not in gzip format` failure
-- **`gunzip -c` → `cat`** in the import loop — since the file is plain tar
-- **`ssh -t`** added to the import loop — gives sudo the terminal it needs
-- **`rm -f /tmp/nodedash.tar`** before buildah push — prevents the "can't modify existing archive" error
-- **Verification loop** added after import (Step 4) to confirm the image landed on every node
-- **Four new Troubleshooting entries** covering every error hit so far
+- **Option A Steps 4–5 (new)** — `hosts.toml` config loop + `snap restart microk8s` + wait-ready check on all nodes
+- **Option C Step 3 (new)** — same containerd config applied for the buildah-direct path
+- **`<INGRESS_ADDRESS>` placeholder** replaces the hardcoded `192.168.1.90` everywhere — makes clear it comes from `kubectl get ingress`
+- **Two new Troubleshooting entries** — insecure registry `ImagePullBackOff` and MetalLB `ADDRESS <none>`
