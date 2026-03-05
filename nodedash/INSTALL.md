@@ -463,3 +463,53 @@ Normal in containers — CPU is based on load average relative to core count and
 - **Option C Step 3 (new)** — same containerd config applied for the buildah-direct path
 - **`<INGRESS_ADDRESS>` placeholder** replaces the hardcoded `192.168.1.90` everywhere — makes clear it comes from `kubectl get ingress`
 - **Two new Troubleshooting entries** — insecure registry `ImagePullBackOff` and MetalLB `ADDRESS <none>`
+
+**** alais microk8s.kubectl to kubectl**
+
+
+
+sudo snap alias microk8s.kubectl kubectl
+
+Then refresh the shell command cache:
+
+hash -r
+
+Now you can run:
+
+kubectl get nodes
+kubectl get pods -A
+
+and it will automatically run:
+
+microk8s kubectl
+
+Verify it worked
+
+which kubectl
+
+You should see something like:
+
+/snap/bin/kubectl
+
+List snap aliases
+
+snap aliases microk8s
+
+You should see:
+
+kubectl -> microk8s.kubectl
+
+Remove it later (if needed)
+
+sudo snap unalias kubectl
+
+
+⸻
+
+This method is better than a bash alias because:
+	•	✔ works in scripts
+	•	✔ works in cron
+	•	✔ works for all users
+	•	✔ survives shell changes
+
+That’s why your Noname install script needed this — shell aliases don’t apply to scripts.
