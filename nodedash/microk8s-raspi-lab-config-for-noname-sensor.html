@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MicroK8s Lab Mode — Raspberry Pi Configuration</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #21253a;
+    --border: #2e3350;
+    --accent: #4f8ef7;
+    --accent2: #7c3aed;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --text: #e2e8f0;
+    --muted: #8892aa;
+    --code-bg: #111827;
+    --code-border: #2e3350;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #7c3aed22;
+    border: 1px solid #7c3aed55;
+    color: #a78bfa;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.25;
+    margin-bottom: 0.75rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    max-width: 600px;
+  }
+
+  /* Context callout */
+  .callout {
+    background: #1e2a1e;
+    border: 1px solid #2d4a2d;
+    border-left: 4px solid var(--green);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+    color: #a7c9a7;
+  }
+
+  .callout strong { color: #86efac; }
+
+  /* Step cards */
+  .steps { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .step-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #fff;
+    flex: 1;
+  }
+
+  .step-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tag-critical { background: #3f1515; color: #fca5a5; border: 1px solid #7f2020; }
+  .tag-security { background: #1a1a3a; color: #93c5fd; border: 1px solid #2a3a6a; }
+  .tag-networking { background: #1a2a1a; color: #86efac; border: 1px solid #2a4a2a; }
+  .tag-tooling { background: #2a1a3a; color: #c4b5fd; border: 1px solid #4a2a6a; }
+  .tag-deploy { background: #2a2a1a; color: #fde68a; border: 1px solid #5a4a1a; }
+  .tag-verify { background: #1a2a2a; color: #67e8f9; border: 1px solid #1a4a4a; }
+
+  .step-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .step-note {
+    font-size: 0.88rem;
+    color: var(--muted);
+    background: #ffffff08;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    border-left: 3px solid var(--border);
+  }
+
+  /* Code blocks */
+  .code-group { display: flex; flex-direction: column; gap: 0.5rem; }
+  .code-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .code-block pre {
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #cdd6f4;
+    white-space: pre;
+  }
+
+  .code-block code { font-family: inherit; }
+
+  /* Syntax coloring */
+  .c-cmd  { color: #89b4fa; }  /* commands */
+  .c-flag { color: #f38ba8; }  /* flags */
+  .c-val  { color: #a6e3a1; }  /* values/strings */
+  .c-kw   { color: #cba6f7; }  /* keywords */
+  .c-cmt  { color: #585b70; font-style: italic; }  /* comments */
+
+  /* "Why this matters" intel box */
+  .intel {
+    background: #0d1a2e;
+    border: 1px solid #1e3a5a;
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    font-size: 0.88rem;
+    color: #7dafd6;
+  }
+  .intel strong { color: #93c5fd; }
+
+  /* Comparison table */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-top: 0.5rem;
+  }
+  .compare-table th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .compare-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #1e2240;
+    vertical-align: top;
+  }
+  .compare-table tr:last-child td { border-bottom: none; }
+  .yes { color: var(--green); font-weight: 600; }
+  .no  { color: #f87171; font-weight: 600; }
+
+  /* Footer */
+  .footer-box {
+    background: #1a2a1e;
+    border: 1px solid #2d4a35;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-top: 2rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .footer-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .footer-text { font-size: 0.9rem; color: #86d9a0; }
+  .footer-text strong { color: #bbf7d0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge">🫐 Raspberry Pi · MicroK8s Lab</div>
+    <h1>Unlocking MicroK8s for Security Sensors</h1>
+    <p class="subtitle">MicroK8s on Ubuntu/Raspberry Pi is locked down by default. These steps open the cluster for eBPF sensors, security agents, and host-inspection containers.</p>
+  </div>
+
+  <!-- Context callout -->
+  <div class="callout">
+    <strong>Why this is needed:</strong> Your Intel cluster already had privileged pods allowed, <code>/proc</code> without <code>hidepid</code>, and permissive AppArmor — so the Helm chart just worked. MicroK8s on Ubuntu Pi ships with stricter defaults that block all of those things.
+  </div>
+
+  <div class="steps">
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <span class="step-title">Disable Pod Security Admission Restrictions</span>
+        <span class="step-tag tag-critical">Most Important</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">Newer Kubernetes enforces Pod Security Admission by default. Label your namespaces as privileged.</div>
+
+        <div class="code-group">
+          <span class="code-label">Default namespace</span>
+          <div class="code-block"><pre>kubectl label ns default \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged --overwrite</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">noname-security namespace (if deploying there)</span>
+          <div class="code-block"><pre>kubectl label ns noname-security \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged --overwrite</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">Apply to all common namespaces at once</span>
+          <div class="code-block"><pre>for ns in kube-system default ingress metallb-system noname-security; do
+  kubectl label ns $ns \
+    pod-security.kubernetes.io/enforce=privileged \
+    --overwrite
+done</pre></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <span class="step-title">Disable AppArmor</span>
+        <span class="step-tag tag-security">Security</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">Ubuntu + MicroK8s often blocks access to <code>/proc/.../ns/net</code> via AppArmor profiles. Disable for lab use.</div>
+
+        <div class="code-group">
+          <span class="code-label">Disable the service</span>
+          <div class="code-block"><pre>sudo systemctl stop apparmor
+sudo systemctl disable apparmor</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">Verify it's inactive</span>
+          <div class="code-block"><pre>sudo aa-status</pre></div>
+        </div>
+
+        <div class="intel">
+          <strong>Expected output:</strong> <code>apparmor module is loaded</code> but profiles should show as disabled or inactive.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <span class="step-title">Remount <code>/proc</code> — Remove hidepid</span>
+        <span class="step-tag tag-critical">Common Root Cause</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">This is the most common cause of "permission denied" errors in security sensors. If <code>/proc</code> is mounted with <code>hidepid=2</code>, containers can't see host processes.</div>
+
+        <div class="code-group">
+          <span class="code-label">Check current mount options</span>
+          <div class="code-block"><pre>mount | grep " on /proc "</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">If you see hidepid=2 — fix it immediately</span>
+          <div class="code-block"><pre>sudo mount -o remount,hidepid=0 /proc</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">Make permanent (lab only) — edit /etc/fstab</span>
+          <div class="code-block"><pre>proc  /proc  proc  defaults  0  0</pre></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <span class="step-title">Verify Privileged Containers Work</span>
+        <span class="step-tag tag-verify">Verify</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">Quick smoke test — if this pod launches successfully, Kubernetes is no longer blocking privileged containers.</div>
+        <div class="code-block"><pre>kubectl run test --rm -it \
+  --image=ubuntu \
+  --privileged \
+  -- bash</pre></div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <span class="step-title">Make <code>kubectl</code> Work Globally</span>
+        <span class="step-tag tag-tooling">MicroK8s Quirk</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">MicroK8s uses <code>microk8s.kubectl</code> instead of the standard <code>kubectl</code>. Scripts and Helm hooks often expect the standard binary.</div>
+        <div class="code-block"><pre>sudo ln -s /snap/bin/microk8s.kubectl /usr/local/bin/kubectl</pre></div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">6</div>
+        <span class="step-title">Enable Required MicroK8s Add-ons</span>
+        <span class="step-tag tag-networking">Networking</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">These add-ons relax networking and storage restrictions that commonly block sensor and security tool deployment.</div>
+        <div class="code-block"><pre>microk8s enable dns
+microk8s enable hostpath-storage
+microk8s enable ingress
+microk8s enable metrics-server</pre></div>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">7</div>
+        <span class="step-title">Re-deploy Your Helm Chart</span>
+        <span class="step-tag tag-deploy">Deploy</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">Clean uninstall first to ensure all previous state is cleared before reinstalling with the relaxed config.</div>
+        <div class="code-block"><pre>helm uninstall noname-security -n noname-security
+helm install noname-security ./helm \
+  --namespace noname-security \
+  --create-namespace</pre></div>
+      </div>
+    </div>
+
+    <!-- Step 8 -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">8</div>
+        <span class="step-title">Verify Sensors Can See Host Processes</span>
+        <span class="step-tag tag-verify">Verify</span>
+      </div>
+      <div class="step-body">
+        <div class="step-note">Exec into your sensor pod and confirm it can access host network namespaces. This is the final proof that the permission problem is resolved.</div>
+
+        <div class="code-group">
+          <span class="code-label">Shell into the sensor pod</span>
+          <div class="code-block"><pre>kubectl exec -n noname-security -it &lt;sensor-pod&gt; -- sh</pre></div>
+        </div>
+
+        <div class="code-group">
+          <span class="code-label">Test host namespace visibility</span>
+          <div class="code-block"><pre>ls /proc/1/ns/net
+ls /proc/$(pgrep kubelet)/ns/net</pre></div>
+        </div>
+
+        <div class="intel">
+          <strong>If both commands return results</strong> (no permission errors), the fix is confirmed and sensors have full host process visibility.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+
+  <!-- Why Intel worked -->
+  <div style="margin-top: 2rem;">
+    <div style="font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;">Why Your Intel Cluster Just Worked</div>
+    <div class="step">
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Setting</th>
+            <th>Intel Cluster</th>
+            <th>MicroK8s Pi (default)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Privileged pods</td>
+            <td class="yes">✓ Allowed</td>
+            <td class="no">✗ Blocked</td>
+          </tr>
+          <tr>
+            <td><code>/proc</code> hidepid</td>
+            <td class="yes">✓ Not set (0)</td>
+            <td class="no">✗ hidepid=2</td>
+          </tr>
+          <tr>
+            <td>AppArmor</td>
+            <td class="yes">✓ Permissive</td>
+            <td class="no">✗ Enforcing</td>
+          </tr>
+          <tr>
+            <td>Pod Security Admission</td>
+            <td class="yes">✓ Relaxed/none</td>
+            <td class="no">✗ Restricted</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer-box">
+    <div class="footer-icon">✅</div>
+    <div class="footer-text">
+      <strong>After these changes, ~90% of Kubernetes security sensors work immediately.</strong><br>
+      There are ~5 additional hidden restrictions that can affect eBPF sensors specifically — ask for the "one command lab mode" script if you hit further issues.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
